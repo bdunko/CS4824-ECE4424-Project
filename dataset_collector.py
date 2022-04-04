@@ -2,7 +2,6 @@ import requests
 import json
 import time
 import random
-import sys
 
 
 class Player:
@@ -65,7 +64,7 @@ class Match:
                 self.losers.append(p)
 
         if len(self.winners) != 5 or len(self.losers) != 5:
-            # print("Team was abnormally sized.")
+            # bprint("Team was abnormally sized.")
             return False
 
         return True
@@ -103,17 +102,17 @@ def request_until_success(request_url):
     success = False
     response = ""
     while not success:
-        print("Sending request for %s." % request_url)
+        bprint("Sending request for %s." % request_url)
         response = requests.get(request_url)
         if response.status_code == 401 or response.status_code == 403:
-            print("Response %d - Go regenerate API key. Killing." % response.status_code)
+            bprint("Response %d - Go regenerate API key. Killing." % response.status_code)
             assert False
         elif response.status_code == 429:
             sleeptime = int(response.headers["Retry-After"])
-            print("Response %d - rate limit hit. Sleeping for %d and retrying later." % (response.status_code, sleeptime))
+            bprint("Response %d - rate limit hit. Sleeping for %d and retrying later." % (response.status_code, sleeptime))
             time.sleep(sleeptime)
         elif response.status_code != 200:
-            print("Response %d. Unexpected. Killing." % response.status_code)
+            bprint("Response %d. Unexpected. Killing." % response.status_code)
             assert False
         else:
             success = True
@@ -122,14 +121,14 @@ def request_until_success(request_url):
 
 
 def get_match(match_id):
-    print("Fetching match with match id %s." % match_id)
+    bprint("Fetching match with match id %s." % match_id)
     url = "https://americas.api.riotgames.com/lol/match/v5/matches/%s?api_key=%s" % (match_id, api_key)
     response = request_until_success(url)
     return json.loads(response.text)
 
 
 def get_matches(puuid):
-    print("Fetching match data for player with puuid %s." % puuid)
+    bprint("Fetching match data for player with puuid %s." % puuid)
     url = "https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/" \
           "%s/ids?start=0&count=20&api_key=%s" % (puuid, api_key)
     response = request_until_success(url)
@@ -137,7 +136,7 @@ def get_matches(puuid):
 
 
 def get_summoner(summoner_id):
-    print("Fetching puuid for player with summoner id %s." % summoner_id)
+    bprint("Fetching puuid for player with summoner id %s." % summoner_id)
     url = "https://na1.api.riotgames.com/lol/summoner/v4/summoners/%s?api_key=%s" % (summoner_id, api_key)
     response = request_until_success(url)
     return json.loads(response.text)
@@ -163,7 +162,7 @@ def get_league(tier, division):
 
 
 def print_json(d):
-    print(json.dumps(d, indent=4))
+    bprint(json.dumps(d, indent=4))
 
 
 def format_json(d):
@@ -179,7 +178,7 @@ def collect_players():
     # get a player from each league
     for tier in tiers:
         r = ""
-        print("Requesting players from tier %s." % tier)
+        bprint("Requesting players from tier %s." % tier)
         if tier == "MASTER" or tier == "GRANDMASTER" or tier == "CHALLENGER":
             response = get_league(tier, "")
             players = response['entries']
@@ -191,7 +190,7 @@ def collect_players():
                     break
         else:
             for division in divisions:
-                print("Request players from tier division %s." % division)
+                bprint("Request players from tier division %s." % division)
                 response = get_league(tier, division)
                 playercount = 0
                 for player in response:
@@ -208,11 +207,15 @@ def collect_players():
     return player_list
 
 
+def bprint(s):
+    log_file.write("%s\n" % s)
+    print(s)
+
+
 api_key = "RGAPI-e80a758a-421f-4f63-ab82-d4b9006896ca"
 players_per_league = 10
 output_file = "matches.csv"
-redirect_stdout_to_log = True
-log_file = "log.txt"
+log_file = open("log.txt", "w", encoding="utf-8")
 
 
 def prog():
@@ -221,14 +224,14 @@ def prog():
     # collect a list of players using League API
     players = collect_players()
 
-    print("---Done collecting players---")
+    bprint("---Done collecting players---")
 
     # fetch puuid for each player using Summoner API
     for player in players:
         response = get_summoner(player.id)
         player.puuid = response['puuid']
 
-    print("---Done collecting puuids---")
+    bprint("---Done collecting puuids---")
 
     # fetch match list for each player's puuid using Match API
     for player in players:
@@ -242,7 +245,7 @@ def prog():
         m = Match(response)
         matches[match_id] = m
 
-    print("---Done collecting matches---")
+    bprint("---Done collecting matches---")
 
     to_delete = []
     for key in matches.keys():
@@ -250,15 +253,15 @@ def prog():
         if not match.process():
             to_delete.append(key)
         else:
-            print("Processed match %s." % match.match_id)
+            bprint("Processed match %s." % match.match_id)
 
-    print("Removing malformed matches.")
+    bprint("Removing malformed matches.")
     for key in to_delete:
-        # print("Removed %s." % key)
+        # bprint("Removed %s." % key)
         matches.pop(key)
 
-    print("---Done processing match data---")
-    print("Writing match data to output file.")
+    bprint("---Done processing match data---")
+    bprint("Writing match data to output file.")
     # write matches to file
     file = open(output_file, "w", encoding="utf-8")
     file.write("%s\n" % get_header())
@@ -266,14 +269,10 @@ def prog():
         file.write("%s\n" % str(match))
     file.close()
 
-    print("---Done writing match data to file---")
-    print("Done.")
+    bprint("---Done writing match data to file---")
+    bprint("Done.")
 
 
 if __name__ == '__main__':
-    if redirect_stdout_to_log:
-        sys.stdout = open(log_file, "w", encoding="utf-8")
-
     prog()
-
-    sys.stdout.close()
+    log_file.close()
