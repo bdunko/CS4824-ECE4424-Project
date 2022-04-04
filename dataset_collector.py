@@ -64,6 +64,12 @@ class Match:
             else:
                 self.losers.append(p)
 
+        if len(self.winners) != 5 or len(self.losers) != 5:
+            # print("Team was abnormally sized.")
+            return False
+
+        return True
+
     def __str__(self):
         s = "%s" % self.match_id
         if self.win:
@@ -203,7 +209,7 @@ def collect_players():
 
 
 api_key = "RGAPI-e80a758a-421f-4f63-ab82-d4b9006896ca"
-players_per_league = 1
+players_per_league = 10
 output_file = "matches.csv"
 redirect_stdout_to_log = True
 log_file = "log.txt"
@@ -238,11 +244,21 @@ def prog():
 
     print("---Done collecting matches---")
 
-    for match in matches.values():
-        match.process()
+    to_delete = []
+    for key in matches.keys():
+        match = matches[key]
+        if not match.process():
+            to_delete.append(key)
+        else:
+            print("Processed match %s." % match.match_id)
+
+    print("Removing malformed matches.")
+    for key in to_delete:
+        # print("Removed %s." % key)
+        matches.pop(key)
 
     print("---Done processing match data---")
-
+    print("Writing match data to output file.")
     # write matches to file
     file = open(output_file, "w", encoding="utf-8")
     file.write("%s\n" % get_header())
