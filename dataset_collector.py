@@ -194,15 +194,17 @@ def collect_players(players_per_league):
                         break
 
     # write list of players to file
-    file = open("players.txt", "w", encoding="utf-8")
-    for player in player_list:
-        file.write("SummonerName: %s\tSummonerID: %s\n" % (player.name, player.id))
+    # file = open("players.txt", "w", encoding="utf-8")
+    # for player in player_list:
+    #     file.write("SummonerName: %s\tSummonerID: %s\n" % (player.name, player.id))
 
     return player_list
 
 
 api_key = "RGAPI-e80a758a-421f-4f63-ab82-d4b9006896ca"
 players_per_league = 3
+output_file = "matches.csv"
+
 
 def prog():
     matches = dict()
@@ -239,7 +241,7 @@ def prog():
     print("---Done processing match data---")
 
     # write matches to file
-    file = open("matches.txt", "w", encoding="utf-8")
+    file = open(output_file, "w", encoding="utf-8")
     file.write("%s\n" % get_header())
     for match in matches.values():
         file.write("%s\n" % str(match))
