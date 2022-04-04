@@ -92,9 +92,6 @@ class Player:
                 self.spell1id, self.spell2id, self.summoner_level)
 
 
-api_key = "RGAPI-e80a758a-421f-4f63-ab82-d4b9006896ca"
-
-
 def request_until_success(request_url):
     success = False
     response = ""
@@ -166,39 +163,7 @@ def format_json(d):
     return json.dumps(d, indent=4)
 
 
-def collect_players_t():
-    tiers = ["GOLD"]
-    divisions = ["I"]
-
-    player_list = []
-
-    # get a player from each league
-    for tier in tiers:
-        r = ""
-        print("Fetching players from tier %s." % tier)
-        if tier == "MASTER" or tier == "GRANDMASTER" or tier == "CHALLENGER":
-            response = get_league(tier, "")
-            players = response['entries']
-            for player in players:
-                player_list.append(Player(player['summonerName'], player['summonerId'], tier))
-        else:
-            for division in divisions:
-                print("Fetching players from tier division %s." % division)
-                response = get_league(tier, division)
-                for player in response:
-                    player_list.append(Player(player['summonerName'], player['summonerId'], "%s%s" % (tier, division)))
-                    if len(player_list) == 5:
-                        break
-
-    # write list of players to file
-    file = open("players.txt", "w", encoding="utf-8")
-    for player in player_list:
-        file.write("SummonerName: %s\tSummonerID: %s\n" % (player.name, player.id))
-
-    return player_list
-
-
-def collect_players():
+def collect_players(players_per_league):
     tiers = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "DIAMOND", "MASTER", "GRANDMASTER", "CHALLENGER"]
     divisions = ["I", "II", "III", "IV"]
 
@@ -211,14 +176,22 @@ def collect_players():
         if tier == "MASTER" or tier == "GRANDMASTER" or tier == "CHALLENGER":
             response = get_league(tier, "")
             players = response['entries']
+            playercount = 0
             for player in players:
-                player_list.append(Player(player['summonerName'], player['summonerId']))
+                player_list.append(Player(player['summonerName'], player['summonerId'], "%s" % tier))
+                playercount += 1
+                if playercount >= players_per_league:
+                    break
         else:
             for division in divisions:
                 print("Request players from tier division %s." % division)
                 response = get_league(tier, division)
+                playercount = 0
                 for player in response:
-                    player_list.append(Player(player['summonerName'], player['summonerId']))
+                    player_list.append(Player(player['summonerName'], player['summonerId'], "%s%s" % (tier, division)))
+                    playercount += 1
+                    if playercount >= players_per_league:
+                        break
 
     # write list of players to file
     file = open("players.txt", "w", encoding="utf-8")
@@ -228,11 +201,14 @@ def collect_players():
     return player_list
 
 
+api_key = "RGAPI-e80a758a-421f-4f63-ab82-d4b9006896ca"
+players_per_league = 3
+
 def prog():
     matches = dict()
 
     # collect a list of players using League API
-    players = collect_players_t()
+    players = collect_players()
 
     print("---Done collecting players---")
 
@@ -262,7 +238,7 @@ def prog():
 
     print("---Done processing match data---")
 
-    # write matches to files
+    # write matches to file
     file = open("matches.txt", "w", encoding="utf-8")
     file.write("%s\n" % get_header())
     for match in matches.values():
