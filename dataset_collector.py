@@ -2,6 +2,29 @@ import requests
 import json
 import time
 import random
+import sys
+
+
+class Player:
+    name = ""
+    id = ""
+    puuid = ""
+    champion_name = ""
+    champion_id = -1
+    spell1id = -1
+    spell2id = -1
+    summoner_level = -1
+    rank = ""
+
+    def __init__(self, name, id, rank):
+        self.name = name.encode('utf-8')
+        self.id = id
+        self.rank = rank
+
+    def __str__(self):
+        return "%s,%s,%s,%d,%d,%d,%d" % \
+               (self.name, self.rank, self.champion_name, self.champion_id,
+                self.spell1id, self.spell2id, self.summoner_level)
 
 
 class Match:
@@ -68,28 +91,6 @@ def get_header():
     header += ",WIN"
 
     return header
-
-
-class Player:
-    name = ""
-    id = ""
-    puuid = ""
-    champion_name = ""
-    champion_id = -1
-    spell1id = -1
-    spell2id = -1
-    summoner_level = -1
-    rank = ""
-
-    def __init__(self, name, id, rank):
-        self.name = name.encode('utf-8')
-        self.id = id
-        self.rank = rank
-
-    def __str__(self):
-        return "%s,%s,%s,%d,%d,%d,%d" % \
-               (self.name, self.rank, self.champion_name, self.champion_id,
-                self.spell1id, self.spell2id, self.summoner_level)
 
 
 def request_until_success(request_url):
@@ -163,7 +164,7 @@ def format_json(d):
     return json.dumps(d, indent=4)
 
 
-def collect_players(players_per_league):
+def collect_players():
     tiers = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "DIAMOND", "MASTER", "GRANDMASTER", "CHALLENGER"]
     divisions = ["I", "II", "III", "IV"]
 
@@ -202,8 +203,10 @@ def collect_players(players_per_league):
 
 
 api_key = "RGAPI-e80a758a-421f-4f63-ab82-d4b9006896ca"
-players_per_league = 3
+players_per_league = 1
 output_file = "matches.csv"
+redirect_stdout_to_log = True
+log_file = "log.txt"
 
 
 def prog():
@@ -245,10 +248,16 @@ def prog():
     file.write("%s\n" % get_header())
     for match in matches.values():
         file.write("%s\n" % str(match))
+    file.close()
 
     print("---Done writing match data to file---")
     print("Done.")
 
 
 if __name__ == '__main__':
+    if redirect_stdout_to_log:
+        sys.stdout = open(log_file, "w", encoding="utf-8")
+
     prog()
+
+    sys.stdout.close()
