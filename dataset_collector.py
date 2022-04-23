@@ -197,8 +197,8 @@ def request_until_success(request_url):
         bprint("Sending request for %s." % request_url)
         response = requests.get(request_url)
         if response.status_code == 401 or response.status_code == 403:
-            bprint("Response %d - Go regenerate API key. Killing." % response.status_code)
-            assert False
+            bprint("Response %d - May need to regenerate API key." % response.status_code)
+            return False
         elif response.status_code == 429:
             sleeptime = int(response.headers["Retry-After"])
             bprint("Response %d - rate limit hit. Sleeping for %d and retrying later." % (response.status_code, sleeptime))
