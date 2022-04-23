@@ -6,7 +6,7 @@ import random
 
 num_runs = 1
 api_key = "RGAPI-659adc1e-559c-48ac-8be5-d8eca104719d"
-players_per_league = 10
+players_per_league = 1
 log_file = open("log.txt", "w", encoding="utf-8")
 tiers = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "DIAMOND", "MASTER", "GRANDMASTER", "CHALLENGER"]
 ranks = ["I", "II", "III", "IV"]
@@ -32,16 +32,17 @@ class Player:
     losses = -1
     veteran = -1
     hotStreak = -1
+    winrate = -1
 
     def __init__(self, name, id):
         self.name = name.encode('utf-8')
         self.id = id
 
     def __str__(self):
-        return "%s,%s,%s,%d,%d,%d,%d,%d,%d,%d" % \
+        return "%s,%s,%s,%d,%d,%d,%d,%d,%.5f,%d,%d" % \
                (self.name, self.rank, self.champion_name,
                 self.spell1id, self.spell2id, self.summoner_level,
-                self.wins, self.losses, self.veteran, self.hotStreak)
+                self.wins, self.losses, self.winrate, self.veteran, self.hotStreak)
 
 
 class Match:
@@ -89,6 +90,7 @@ class Match:
                 p.rank = rank_as_number(queue["tier"], queue["rank"])
                 p.wins = queue["wins"]
                 p.losses = queue["losses"]
+                p.winrate = float(p.wins) / float(p.losses)
                 p.hotStreak = 1 if queue["hotStreak"] == "true" else 0
                 p.veteran = 1 if queue["hotStreak"] == "true" else 0
                 break
@@ -132,6 +134,7 @@ class Match:
             first = self.losers
             second = self.winners
 
+        champions.sort()
         def append_team(team):
             r = ""
             for play in team:
@@ -174,10 +177,11 @@ def rank_as_number(tier, rank):
 def make_header():
     header = "MATCH_ID,RANK_PLAYED_AT"
 
+    champions.sort()
     for team in range(1, 3):
         for player in range(1, 6):
-            player_header = "T%dP%dNAME,T%dP%dRANK,T%dP%dCHAMPION,T%dP%dSPELL1,T%dP%dSPELL2,T%dP%dSUMMONERLEVEL,T%dP%dWINS,T%dP%dLOSSES,T%dP%dVETERAN,T%dP%dHOTSTREAK" \
-                            % (team, player, team, player, team, player, team, player, team, player, team, player, team, player, team, player, team, player, team, player)
+            player_header = "T%dP%dNAME,T%dP%dRANK,T%dP%dCHAMPION,T%dP%dSPELL1,T%dP%dSPELL2,T%dP%dSUMMONERLEVEL,T%dP%dWINS,T%dP%dLOSSES,T%dP%dWINRATET%dP%dVETERAN,T%dP%dHOTSTREAK" \
+                            % (team, player, team, player, team, player, team, player, team, player, team, player, team, player, team, player, team, player, team, player, team, player)
             header += ",%s" % player_header
         champion_header = ""
         for champion in champions:
@@ -371,6 +375,7 @@ def collect(output_file):
         match = matches[key]
         if not match.process():
             to_delete.append(key)
+            bprint("Failed to process match %s." % match.match_id)
         else:
             bprint("Processed match %s." % match.match_id)
 
