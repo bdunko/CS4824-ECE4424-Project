@@ -4,6 +4,15 @@ import time
 import random
 
 
+num_runs = 1
+api_key = "RGAPI-659adc1e-559c-48ac-8be5-d8eca104719d"
+players_per_league = 1
+log_file = open("log.txt", "w", encoding="utf-8")
+tiers = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "DIAMOND", "MASTER", "GRANDMASTER", "CHALLENGER"]
+ranks = ["I", "II", "III", "IV"]
+champions = []
+
+
 class Player:
     name = ""
     id = ""
@@ -14,16 +23,20 @@ class Player:
     spell2id = -1
     summoner_level = -1
     rank = ""
+    wins = -1
+    losses = -1
+    veteran = -1
+    hotStreak = -1
 
-    def __init__(self, name, id, rank):
+    def __init__(self, name, id):
         self.name = name.encode('utf-8')
         self.id = id
-        self.rank = rank
 
     def __str__(self):
-        return "%s,%s,%s,%d,%d,%d,%d" % \
-               (self.name, self.rank, self.champion_name, self.champion_id,
-                self.spell1id, self.spell2id, self.summoner_level)
+        return "%s,%s,%s,%d,%d,%d,%d,%d,%d,%d" % \
+               (self.name, self.rank, self.champion_name,
+                self.spell1id, self.spell2id, self.summoner_level,
+                self.wins, self.losses, self.veteran, self.hotStreak)
 
 
 class Match:
@@ -31,11 +44,9 @@ class Match:
     winners = []
     losers = []
     match_id = ""
-    win = False
 
     def __init__(self, raw):
         self.raw = raw
-        self.win = random.randint(0, 1) == 0
         self.winners = []
         self.losers = []
         self.match_id = ""
@@ -50,10 +61,34 @@ class Match:
         self.match_id = self.raw['metadata']['matchId']
 
         for play in self.raw['info']['participants']:
-            p = Player(play['summonerName'], play['summonerId'], "placehold")
+            p = Player(play['summonerName'], play['summonerId'])
             p.puuid = play['puuid']
+
+            found_correct_queue = False
+            # get player by puuid for further info
+            player_data = get_league_by_encrypted_summonerid(play['summonerId'])
+            for queue in player_data:
+                bprint("Queue type: %s" % queue["queueType"])
+                if queue["queueType"] != "RANKED_SOLO_5x5":
+                    continue  # skip over other queues
+                found_correct_queue = True
+                p.rank = rank_as_number(queue["tier"], queue["rank"])
+                p.wins = queue["wins"]
+                p.losses = queue["losses"]
+                p.hotStreak = 1 if queue["hotStreak"] == "true" else 0
+                p.veteran = 1 if queue["hotStreak"] == "true" else 0
+                break
+
+            if not found_correct_queue:
+                bprint("Couldn't find queue...")
+                return False
+
             p.champion_id = play['championId']
             p.champion_name = play['championName']
+
+            if p.champion_name not in champions:
+                champions.append(p.champion_name)
+
             p.spell1id = play['summoner1Id']
             p.spell2id = play['summoner2Id']
             p.summoner_level = play['summonerLevel']
@@ -71,29 +106,72 @@ class Match:
 
     def __str__(self):
         s = "%s" % self.match_id
-        if self.win:
-            for play in self.winners:
-                s = "%s,%s" % (s, str(play))
-            for play in self.losers:
-                s = "%s,%s" % (s, str(play))
+        first = []
+        second = []
+
+        # choose whether to put the winners or losers first
+        winners_first = random.randint(0, 1) == 0
+        if winners_first:
+            first = self.winners
+            second = self.losers
         else:
-            for play in self.losers:
-                s = "%s,%s" % (s, str(play))
-            for play in self.winners:
-                s = "%s,%s" % (s, str(play))
-        s = ("%s,1" if self.win else "%s,0") % s
+            first = self.losers
+            second = self.winners
+
+        def append_team(team):
+            r = ""
+            for play in team:
+                r = "%s,%s" % (r, str(play))
+            for champion in champions:
+                champion_in_team = 0
+                for play in team:
+                    if play.champion_name == champion:
+                        champion_in_team = 1
+                        break
+                r = "%s,%d" % (r, champion_in_team)
+            # bprint("TEAM = " % r)
+            return r
+
+        s = "%s%s" % (s, append_team(first))
+        s = "%s%s" % (s, append_team(second))
+
+        # add which team won
+        s = ("%s,1" if winners_first else "%s,2") % s
         return "%s" % s
+
+
+rank_map = {
+    "IRON IV": 0, "IRON III": 1, "IRON II": 2, "IRON I": 3,
+    "BRONZE IV": 4, "BRONZE III": 5, "BRONZE II": 6, "BRONZE I": 7,
+    "SILVER IV": 8, "SILVER III": 9, "SILVER II": 10, "SILVER I": 11,
+    "GOLD IV": 12, "GOLD III": 13, "GOLD II": 14, "GOLD I": 15,
+    "PLATINUM IV": 16, "PLATINUM III": 17, "PLATINUM II": 18, "PLATINUM I": 19,
+    "DIAMOND IV": 20, "DIAMOND III": 21, "DIAMOND II": 22, "DIAMOND I": 23,
+    "MASTER": 24, "GRANDMASTER": 25, "CHALLENGER": 26
+}
+
+
+def rank_as_number(tier, rank):
+    if tier == "MASTER" or tier == "GRANDMASTER" or tier == "CHALLENGER":
+        return rank_map[tier]
+    return rank_map["%s %s" % (tier, rank)]
 
 
 def get_header():
     header = "MATCH_ID"
 
-    for i in range(1, 11):
-        player_header = "P%dNAME,P%dRANK,P%dCHAMPION,P%dCHAMPIONID,P%dSPELL1,P%dSPELL2,P%dSUMMONERLEVEL" \
-                        % (i, i, i, i, i, i, i)
-        header += ",%s" % player_header
+    for team in range(1, 3):
+        for player in range(1, 6):
+            player_header = "T%dP%dNAME,T%dP%dRANK,T%dP%dCHAMPION,T%dP%dSPELL1,T%dP%dSPELL2,T%dP%dSUMMONERLEVEL,T%dP%dWINS,T%dP%dLOSSES,T%dP%dVETERAN,T%dP%dHOTSTREAK" \
+                            % (team, player, team, player, team, player, team, player, team, player, team, player, team, player, team, player, team, player, team, player)
+            header += ",%s" % player_header
+        champion_header = ""
+        for champion in champions:
+            champion_header += ",T%d%s" % (team, champion)
+        header += "%s" % champion_header
+    header += ",WINNINGTEAM"
 
-    header += ",WIN"
+    bprint(header)
 
     return header
 
@@ -142,7 +220,14 @@ def get_summoner(summoner_id):
     return json.loads(response.text)
 
 
-def get_league(tier, division):
+def get_league_by_encrypted_summonerid(summoner_id):
+    bprint("Fetching league data for player with encrypted summoner id %s." % summoner_id)
+    url = "https://na1.api.riotgames.com/lol/league/v4/entries/by-summoner/%s?api_key=%s" % (summoner_id, api_key)
+    response = request_until_success(url)
+    return json.loads(response.text)
+
+
+def get_league_by_tier_rank(tier, rank):
     url = ""
     # different apis for grandmaster, master, and challenger league... thanks Riot
     if tier == "GRANDMASTER":
@@ -156,7 +241,7 @@ def get_league(tier, division):
               "RANKED_SOLO_5x5?api_key=%s" % api_key
     else:
         url = "https://na1.api.riotgames.com/lol/league/v4/entries/" \
-              "RANKED_SOLO_5x5/%s/%s?page=1&api_key=%s" % (tier, division, api_key)
+              "RANKED_SOLO_5x5/%s/%s?page=1&api_key=%s" % (tier, rank, api_key)
     response = request_until_success(url)
     return json.loads(response.text)
 
@@ -170,8 +255,9 @@ def format_json(d):
 
 
 def collect_players():
-    tiers = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "DIAMOND", "MASTER", "GRANDMASTER", "CHALLENGER"]
-    divisions = ["I", "II", "III", "IV"]
+    # temporary
+    tiers = ["IRON"]
+    ranks = ["II"]
 
     player_list = []
 
@@ -180,21 +266,21 @@ def collect_players():
         r = ""
         bprint("Requesting players from tier %s." % tier)
         if tier == "MASTER" or tier == "GRANDMASTER" or tier == "CHALLENGER":
-            response = get_league(tier, "")
+            response = get_league_by_tier_rank(tier, "")
             players = response['entries']
             playercount = 0
             for player in players:
-                player_list.append(Player(player['summonerName'], player['summonerId'], "%s" % tier))
+                player_list.append(Player(player['summonerName'], player['summonerId']))
                 playercount += 1
                 if playercount >= players_per_league:
                     break
         else:
-            for division in divisions:
-                bprint("Request players from tier division %s." % division)
-                response = get_league(tier, division)
+            for rank in ranks:
+                bprint("Request players from tier rank %s." % rank)
+                response = get_league_by_tier_rank(tier, rank)
                 playercount = 0
                 for player in response:
-                    player_list.append(Player(player['summonerName'], player['summonerId'], "%s%s" % (tier, division)))
+                    player_list.append(Player(player['summonerName'], player['summonerId']))
                     playercount += 1
                     if playercount >= players_per_league:
                         break
@@ -212,13 +298,7 @@ def bprint(s):
     print(s)
 
 
-api_key = "RGAPI-e80a758a-421f-4f63-ab82-d4b9006896ca"
-players_per_league = 10
-output_file = "matches.csv"
-log_file = open("log.txt", "w", encoding="utf-8")
-
-
-def prog():
+def collect(output_file):
     matches = dict()
 
     # collect a list of players using League API
@@ -255,13 +335,18 @@ def prog():
         else:
             bprint("Processed match %s." % match.match_id)
 
-    bprint("Removing malformed matches.")
+    bprint("List of champions in dataset: %s" % (str(champions)))
+
+    bprint("Removing malformed matches...")
+    num_malformed = 0
     for key in to_delete:
         # bprint("Removed %s." % key)
+        num_malformed += 1
         matches.pop(key)
+    bprint("Removed %d malformed matches." % num_malformed)
 
     bprint("---Done processing match data---")
-    bprint("Writing match data to output file.")
+    bprint("Writing match data to output file %s." % output_file)
     # write matches to file
     file = open(output_file, "w", encoding="utf-8")
     file.write("%s\n" % get_header())
@@ -270,9 +355,14 @@ def prog():
     file.close()
 
     bprint("---Done writing match data to file---")
-    bprint("Done.")
+    bprint("-------------------------------------")
 
 
 if __name__ == '__main__':
-    prog()
+    for i in range(0, num_runs):
+        try:
+            collect("matches%d.csv" % i)
+        except AssertionError:
+            bprint("ASSERTION ERROR!")
+    bprint("Done.")
     log_file.close()
