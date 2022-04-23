@@ -6,17 +6,22 @@ import random
 
 num_runs = 1
 api_key = "RGAPI-659adc1e-559c-48ac-8be5-d8eca104719d"
-players_per_league = 1
+players_per_league = 10
 log_file = open("log.txt", "w", encoding="utf-8")
 tiers = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "DIAMOND", "MASTER", "GRANDMASTER", "CHALLENGER"]
 ranks = ["I", "II", "III", "IV"]
 champions = []
+
+# testing
+# tiers = ["IRON"]
+# ranks = ["II"]
 
 
 class Player:
     name = ""
     id = ""
     puuid = ""
+    from_rank = ""
     champion_name = ""
     champion_id = -1
     spell1id = -1
@@ -44,12 +49,14 @@ class Match:
     winners = []
     losers = []
     match_id = ""
+    rank_played_at = ""
 
-    def __init__(self, raw):
+    def __init__(self, raw, rank):
         self.raw = raw
         self.winners = []
         self.losers = []
         self.match_id = ""
+        self.rank_played_at = rank
 
     def add_winner(self, winner_json):
         self.winners.append(winner_json)
@@ -66,9 +73,16 @@ class Match:
 
             found_correct_queue = False
             # get player by puuid for further info
-            player_data = get_league_by_encrypted_summonerid(play['summonerId'])
-            for queue in player_data:
-                bprint("Queue type: %s" % queue["queueType"])
+            if play['summonerId'] == "BOT":  # apparently Riot sometimes adds BOTs to the games. Thanks Riot.
+                return False;
+
+            response = get_league_by_encrypted_summonerid(play['summonerId'])
+
+            if not response:
+                bprint("Failed to get league data for summoner id %s." % play['summonerId'])
+                return False
+
+            for queue in response:
                 if queue["queueType"] != "RANKED_SOLO_5x5":
                     continue  # skip over other queues
                 found_correct_queue = True
@@ -80,7 +94,7 @@ class Match:
                 break
 
             if not found_correct_queue:
-                bprint("Couldn't find queue...")
+                bprint("Couldn't find queue.")
                 return False
 
             p.champion_id = play['championId']
@@ -105,7 +119,7 @@ class Match:
         return True
 
     def __str__(self):
-        s = "%s" % self.match_id
+        s = "%s,%s" % (self.match_id, self.rank_played_at)
         first = []
         second = []
 
@@ -157,8 +171,8 @@ def rank_as_number(tier, rank):
     return rank_map["%s %s" % (tier, rank)]
 
 
-def get_header():
-    header = "MATCH_ID"
+def make_header():
+    header = "MATCH_ID,RANK_PLAYED_AT"
 
     for team in range(1, 3):
         for player in range(1, 6):
@@ -171,7 +185,7 @@ def get_header():
         header += "%s" % champion_header
     header += ",WINNINGTEAM"
 
-    bprint(header)
+    # bprint(header)
 
     return header
 
@@ -190,8 +204,8 @@ def request_until_success(request_url):
             bprint("Response %d - rate limit hit. Sleeping for %d and retrying later." % (response.status_code, sleeptime))
             time.sleep(sleeptime)
         elif response.status_code != 200:
-            bprint("Response %d. Unexpected. Killing." % response.status_code)
-            assert False
+            bprint("Response %d. Unexpected." % response.status_code)
+            return False
         else:
             success = True
     assert response.status_code == 200  # sanity check
@@ -202,6 +216,8 @@ def get_match(match_id):
     bprint("Fetching match with match id %s." % match_id)
     url = "https://americas.api.riotgames.com/lol/match/v5/matches/%s?api_key=%s" % (match_id, api_key)
     response = request_until_success(url)
+    if not response:
+        return False
     return json.loads(response.text)
 
 
@@ -210,6 +226,8 @@ def get_matches(puuid):
     url = "https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/" \
           "%s/ids?start=0&count=20&api_key=%s" % (puuid, api_key)
     response = request_until_success(url)
+    if not response:
+        return False
     return json.loads(response.text)
 
 
@@ -217,6 +235,8 @@ def get_summoner(summoner_id):
     bprint("Fetching puuid for player with summoner id %s." % summoner_id)
     url = "https://na1.api.riotgames.com/lol/summoner/v4/summoners/%s?api_key=%s" % (summoner_id, api_key)
     response = request_until_success(url)
+    if not response:
+        return False
     return json.loads(response.text)
 
 
@@ -224,6 +244,8 @@ def get_league_by_encrypted_summonerid(summoner_id):
     bprint("Fetching league data for player with encrypted summoner id %s." % summoner_id)
     url = "https://na1.api.riotgames.com/lol/league/v4/entries/by-summoner/%s?api_key=%s" % (summoner_id, api_key)
     response = request_until_success(url)
+    if not response:
+        return False
     return json.loads(response.text)
 
 
@@ -243,6 +265,8 @@ def get_league_by_tier_rank(tier, rank):
         url = "https://na1.api.riotgames.com/lol/league/v4/entries/" \
               "RANKED_SOLO_5x5/%s/%s?page=1&api_key=%s" % (tier, rank, api_key)
     response = request_until_success(url)
+    if not response:
+        return False
     return json.loads(response.text)
 
 
@@ -255,10 +279,6 @@ def format_json(d):
 
 
 def collect_players():
-    # temporary
-    tiers = ["IRON"]
-    ranks = ["II"]
-
     player_list = []
 
     # get a player from each league
@@ -267,20 +287,30 @@ def collect_players():
         bprint("Requesting players from tier %s." % tier)
         if tier == "MASTER" or tier == "GRANDMASTER" or tier == "CHALLENGER":
             response = get_league_by_tier_rank(tier, "")
+            if not response:
+                bprint("Failed to get players from tier %s." % tier)
+                continue
             players = response['entries']
             playercount = 0
             for player in players:
-                player_list.append(Player(player['summonerName'], player['summonerId']))
+                p = Player(player['summonerName'], player['summonerId'])
+                p.from_rank = tier
+                player_list.append(p)
                 playercount += 1
-                if playercount >= players_per_league:
+                if playercount >= players_per_league * 4:
                     break
         else:
             for rank in ranks:
                 bprint("Request players from tier rank %s." % rank)
                 response = get_league_by_tier_rank(tier, rank)
+                if not response:
+                    bprint("Failed to get players from tier %s rank %s." % (tier, rank))
+                    continue
                 playercount = 0
                 for player in response:
-                    player_list.append(Player(player['summonerName'], player['summonerId']))
+                    p = Player(player['summonerName'], player['summonerId'])
+                    p.from_rank = "%s %s" % (tier, rank)
+                    player_list.append(p)
                     playercount += 1
                     if playercount >= players_per_league:
                         break
@@ -309,6 +339,9 @@ def collect(output_file):
     # fetch puuid for each player using Summoner API
     for player in players:
         response = get_summoner(player.id)
+        if not response:
+            bprint("Failed to get puuid from player %s." % player.id)
+            continue
         player.puuid = response['puuid']
 
     bprint("---Done collecting puuids---")
@@ -316,13 +349,19 @@ def collect(output_file):
     # fetch match list for each player's puuid using Match API
     for player in players:
         response = get_matches(player.puuid)
+        if not response:
+            bprint("Failed to get match list for player %s." % str(player.puuid))
+            continue
         match_id = response[0]  # take the first match only
 
         response = get_match(match_id)
+        if not response:
+            bprint("Failed to get match data for match %s." % str(match_id))
+            continue
 
         assert match_id == response['metadata']['matchId']
 
-        m = Match(response)
+        m = Match(response, player.from_rank)
         matches[match_id] = m
 
     bprint("---Done collecting matches---")
@@ -349,7 +388,7 @@ def collect(output_file):
     bprint("Writing match data to output file %s." % output_file)
     # write matches to file
     file = open(output_file, "w", encoding="utf-8")
-    file.write("%s\n" % get_header())
+    file.write("%s\n" % make_header())
     for match in matches.values():
         file.write("%s\n" % str(match))
     file.close()
