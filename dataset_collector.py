@@ -6,15 +6,15 @@ import random
 
 num_runs = 1
 api_key = "RGAPI-659adc1e-559c-48ac-8be5-d8eca104719d"
-players_per_league = 1
+players_per_league = 100
 log_file = open("log.txt", "w", encoding="utf-8")
-tiers = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "DIAMOND", "MASTER", "GRANDMASTER", "CHALLENGER"]
-ranks = ["I", "II", "III", "IV"]
+#tiers = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "DIAMOND", "MASTER", "GRANDMASTER", "CHALLENGER"]
+#ranks = ["IV", "III", "II", "I"]
 champions = []
 
 # testing
-# tiers = ["IRON"]
-# ranks = ["II"]
+tiers = ["IRON"]
+ranks = ["II"]
 
 
 class Player:
@@ -90,7 +90,7 @@ class Match:
                 p.rank = rank_as_number(queue["tier"], queue["rank"])
                 p.wins = queue["wins"]
                 p.losses = queue["losses"]
-                p.winrate = float(p.wins) / float(p.losses)
+                p.winrate = float(p.wins) / float(p.losses + p.wins)
                 p.hotStreak = 1 if queue["hotStreak"] == "true" else 0
                 p.veteran = 1 if queue["hotStreak"] == "true" else 0
                 break
@@ -180,7 +180,7 @@ def make_header():
     champions.sort()
     for team in range(1, 3):
         for player in range(1, 6):
-            player_header = "T%dP%dNAME,T%dP%dRANK,T%dP%dCHAMPION,T%dP%dSPELL1,T%dP%dSPELL2,T%dP%dSUMMONERLEVEL,T%dP%dWINS,T%dP%dLOSSES,T%dP%dWINRATET%dP%dVETERAN,T%dP%dHOTSTREAK" \
+            player_header = "T%dP%dNAME,T%dP%dRANK,T%dP%dCHAMPION,T%dP%dSPELL1,T%dP%dSPELL2,T%dP%dSUMMONERLEVEL,T%dP%dWINS,T%dP%dLOSSES,T%dP%dWINRATE,T%dP%dVETERAN,T%dP%dHOTSTREAK" \
                             % (team, player, team, player, team, player, team, player, team, player, team, player, team, player, team, player, team, player, team, player, team, player)
             header += ",%s" % player_header
         champion_header = ""
