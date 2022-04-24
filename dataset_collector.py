@@ -8,13 +8,13 @@ num_runs = 1
 api_key = "RGAPI-659adc1e-559c-48ac-8be5-d8eca104719d"
 players_per_league = 100
 log_file = open("log.txt", "w", encoding="utf-8")
-#tiers = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "DIAMOND", "MASTER", "GRANDMASTER", "CHALLENGER"]
-#ranks = ["IV", "III", "II", "I"]
+tiers = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "DIAMOND", "MASTER", "GRANDMASTER", "CHALLENGER"]
+ranks = ["IV", "III", "II", "I"]
 champions = []
 
 # testing
-tiers = ["IRON"]
-ranks = ["II"]
+# tiers = ["IRON"]
+# ranks = ["II"]
 
 
 class Player:
