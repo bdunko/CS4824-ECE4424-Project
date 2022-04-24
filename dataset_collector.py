@@ -135,6 +135,7 @@ class Match:
             second = self.winners
 
         champions.sort()
+
         def append_team(team):
             r = ""
             for play in team:
