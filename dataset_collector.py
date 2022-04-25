@@ -59,12 +59,6 @@ class Match:
         self.match_id = ""
         self.rank_played_at = rank
 
-    def add_winner(self, winner_json):
-        self.winners.append(winner_json)
-
-    def add_lose(self, loser_json):
-        self.losers.append(loser_json)
-
     def process(self):
         self.match_id = self.raw['metadata']['matchId']
 
@@ -175,6 +169,7 @@ def rank_as_number(tier, rank):
     return rank_map["%s %s" % (tier, rank)]
 
 
+# returns full header for csv file
 def make_header():
     header = "MATCH_ID,RANK_PLAYED_AT"
 
@@ -366,11 +361,13 @@ def collect(output_file):
 
         assert match_id == response['metadata']['matchId']
 
+        # add the match to match dictionary for later processing
         m = Match(response, player.from_rank)
         matches[match_id] = m
 
     bprint("---Done collecting matches---")
 
+    # process each match; delete matches with missing information
     to_delete = []
     for key in matches.keys():
         match = matches[key]
